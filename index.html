@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Personal Gym Workspace</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* カードの3Dめくりアニメーション */
+        .perspective-1000 { perspective: 1000px; }
+        .preserve-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        
+        /* スクロールバーの非表示（モバイル向け）*/
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ステップ用の装飾線 */
+        .step-line {
+            position: absolute;
+            left: 1.25rem;
+            top: 2.5rem;
+            bottom: -1rem;
+            width: 2px;
+            background-color: #e2e8f0; /* slate-200 */
+            z-index: 0;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col pb-12 select-none">
+
+    <!-- ヘッダー -->
+    <header class="bg-gradient-to-r from-slate-800 to-slate-900 text-white py-4 px-5 shadow-lg sticky top-0 z-50">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-2.5">
+                <div class="bg-emerald-500/20 p-2 rounded-xl border border-emerald-500/30">
+                    <i data-lucide="dumbbell" class="w-5 h-5 text-emerald-400"></i>
+                </div>
+                <div>
+                    <h1 class="text-sm font-black tracking-widest uppercase">Smart Personal Gym</h1>
+                    <p class="text-[10px] text-slate-400 font-bold tracking-wider flex items-center gap-1">
+                        千葉博文 専用ワークスペース
+                    </p>
+                </div>
+            </div>
+            <!-- 右上ショートカット群 -->
+            <div class="flex items-center space-x-1">
+                <a href="https://docs.google.com/spreadsheets/d/1FPXVNEf20gGu1-QV0SFQLRjs2Tc7VtTP-7-TfK8SOf8/edit#gid=303650144" target="_blank" class="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-300 hover:text-emerald-400" title="My_English_DBを開く">
+                    <i data-lucide="table" class="w-5 h-5"></i>
+                </a>
+                <button id="settingsBtn" class="p-2 hover:bg-white/10 rounded-xl transition-all relative text-slate-300" title="連携設定">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto w-full px-4 pt-5 flex-grow relative">
+
+        <!-- ⚙️ GAS連携設定パネル -->
+        <section id="settingsPanel" class="bg-white rounded-2xl p-5 shadow-md border border-slate-200 hidden mb-6 relative z-10">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                    <i data-lucide="key" class="w-4 h-4 text-indigo-500"></i>
+                    スプレッドシート連携設定
+                </h2>
+                <button id="closeSettings" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">GAS Web App URL</label>
+                    <input type="url" id="gasUrlInput" class="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
+                </div>
+                <button id="saveSettingsBtn" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs py-2.5 px-4 rounded-xl font-semibold transition">
+                    設定を保存
+                </button>
+            </div>
+        </section>
+
+        <!-- 🎛️ レッスンコントロール -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 mb-6 flex flex-col space-y-3 relative z-10">
+            <div class="flex justify-between items-center">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Today's Topic</span>
+                <div class="flex items-center gap-1.5">
+                    <button id="syncDataBtn" class="text-[10px] text-slate-600 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 px-2 py-1 rounded font-bold transition flex items-center gap-1">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i> 同期
+                    </button>
+                    <button id="shuffleBtn" class="text-[10px] text-slate-600 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-600 px-2 py-1 rounded font-bold transition flex items-center gap-1">
+                        <i data-lucide="shuffle" class="w-3 h-3"></i> シャッフル
+                    </button>
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <button id="prevTextBtn" class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                <span id="themeBadge" class="font-bold text-slate-800 text-sm max-w-[240px] truncate text-center">読込中...</span>
+                <button id="nextTextBtn" class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+            </div>
+            <div class="text-center">
+                <span id="textIndexLabel" class="text-[10px] font-bold text-slate-400">1 / 1</span>
+            </div>
+        </div>
+
+        <!-- ================= WORKOUT FLOW ================= -->
+        <div class="relative">
+            <div class="step-line hidden md:block"></div> 
+
+            <!-- 📖 STEP 1: Reading & Listening -->
+            <section class="mb-10 relative z-10">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-md flex-shrink-0">1</div>
+                    <div>
+                        <h2 class="text-sm font-black text-slate-700 tracking-wide">Reading & Listening</h2>
+                        <p class="text-[10px] text-slate-500 mt-0.5">WPM計測と、速度調整機能を使ったリスニングを行います。</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4 ml-0 md:ml-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <span id="wordCountBadge" class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wider">--- words</span>
+                        <!-- 音声速度スライダー＆再生ボタン -->
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded-lg">
+                                <span class="text-[10px] font-bold text-slate-500">速度</span>
+                                <input type="range" id="audioSpeedSlider" min="0.5" max="1.5" step="0.1" value="0.9" class="w-16 accent-emerald-500">
+                                <span id="audioSpeedLabel" class="text-[10px] font-bold text-slate-600 w-6">0.9x</span>
+                            </div>
+                            <button id="playTextAudioBtn" class="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition shadow-sm text-xs font-bold" title="ネイティブ音声を再生">
+                                <i data-lucide="volume-2" class="w-4 h-4"></i> 聞く
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="englishTextArea" class="bg-slate-50 border border-slate-100 rounded-xl p-4 text-[15px] leading-relaxed text-slate-700 font-normal select-text max-h-64 overflow-y-auto no-scrollbar whitespace-pre-wrap">Loading...</div>
+                    
+                    <div class="flex justify-between items-center gap-4">
+                        <button id="toggleLinkingBtn" class="text-xs text-slate-500 hover:text-emerald-600 font-bold flex items-center gap-1 transition">
+                            <i data-lucide="eye" class="w-4 h-4"></i> <span>リンキングガイド</span>
+                        </button>
+                        <button id="toggleTranslationBtn" class="text-xs text-slate-500 hover:text-indigo-600 font-bold flex items-center gap-1 transition">
+                            <i data-lucide="languages" class="w-4 h-4"></i> <span>日本語訳</span>
+                        </button>
+                    </div>
+
+                    <div id="linkingGuide" class="hidden p-3.5 bg-emerald-50/50 border border-emerald-100 rounded-xl text-xs text-slate-800 leading-relaxed space-y-1"></div>
+                    <div id="translationArea" class="hidden p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap"></div>
+
+                    <!-- WPM計測コンソール -->
+                    <div class="bg-slate-800 rounded-xl p-4 flex flex-col items-center justify-center space-y-4 shadow-inner mt-4">
+                        <div id="timerDisplay" class="text-4xl font-black text-white tracking-wider font-mono">00:00.00</div>
+                        <div class="flex w-full gap-3">
+                            <button id="startWpmBtn" class="flex-1 bg-emerald-500 text-white font-extrabold py-3 px-4 rounded-xl shadow-md hover:bg-emerald-400 active:scale-95 transition-all flex items-center justify-center gap-2">
+                                <i data-lucide="play" class="w-4 h-4 fill-current"></i> START
+                            </button>
+                            <button id="stopWpmBtn" class="flex-1 bg-rose-500 text-white font-extrabold py-3 px-4 rounded-xl shadow-md hover:bg-rose-400 active:scale-95 transition-all flex items-center justify-center gap-2" disabled>
+                                <i data-lucide="square" class="w-4 h-4 fill-current"></i> STOP
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 測定結果 -->
+                    <div id="wpmResultPanel" class="hidden bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex justify-around items-center">
+                        <div class="text-center">
+                            <span class="text-[10px] font-bold text-emerald-600 block">TIME</span>
+                            <span id="timeTakenVal" class="text-lg font-black text-slate-700">--s</span>
+                        </div>
+                        <div class="w-px h-8 bg-emerald-200"></div>
+                        <div class="text-center">
+                            <span class="text-[10px] font-bold text-emerald-600 block">YOUR WPM</span>
+                            <span id="wpmValue" class="text-2xl font-black text-emerald-600">--</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 🔤 STEP 2: Vocabulary Review -->
+            <section class="mb-10 relative z-10">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-black text-sm shadow-md flex-shrink-0">2</div>
+                    <div>
+                        <h2 class="text-sm font-black text-slate-700 tracking-wide">Vocabulary Review</h2>
+                        <p class="text-[10px] text-slate-500 mt-0.5">必要な単語だけを抽出したカードで意味と音をチェックします。</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 ml-0 md:ml-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Flash Cards</span>
+                        <span id="vocabIndexLabel" class="text-xs text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded-full">0 / 0</span>
+                    </div>
+
+                    <div id="cardContainer" class="w-full h-40 perspective-1000 cursor-pointer mb-4">
+                        <div id="flashCard" class="w-full h-full preserve-3d transition-transform duration-500 relative rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-amber-50/30 shadow-sm flex items-center justify-center p-5 text-center">
+                            <div class="absolute inset-0 backface-hidden flex flex-col items-center justify-center p-4">
+                                <span class="text-[9px] font-bold text-slate-400 tracking-widest block mb-1">TARGET WORD</span>
+                                <div class="flex items-center justify-center gap-2 w-full relative">
+                                    <span id="cardWord" class="text-xl font-black text-slate-800 tracking-wide">Loading...</span>
+                                    <button id="playWordAudioBtn" class="absolute -right-2 text-amber-500 hover:text-amber-600 p-2 rounded-full hover:bg-amber-100 transition" title="発音を聞く">
+                                        <i data-lucide="volume-2" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                                <span class="text-[10px] text-amber-600/70 font-bold mt-4 flex items-center gap-1">
+                                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> タップして裏返す
+                                </span>
+                            </div>
+                            <div class="absolute inset-0 backface-hidden rotate-y-180 flex flex-col items-center justify-center p-4 bg-amber-50/80 rounded-2xl border border-amber-100">
+                                <span class="text-[9px] font-bold text-amber-600 tracking-widest block mb-0.5">MEANING</span>
+                                <span id="cardMeaning" class="text-base font-bold text-slate-800">---</span>
+                                <div class="w-full border-t border-amber-200/50 my-2"></div>
+                                <p id="cardExample" class="text-[11px] text-slate-600 font-medium italic leading-relaxed">---</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex w-full justify-between items-center gap-3">
+                        <button id="prevCardBtn" class="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i> PREV
+                        </button>
+                        <button id="nextCardBtn" class="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                            NEXT <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 🎙️ STEP 3: 1-Minute Speech -->
+            <section class="mb-10 relative z-10">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-black text-sm shadow-md flex-shrink-0">3</div>
+                    <div>
+                        <h2 class="text-sm font-black text-slate-700 tracking-wide">1-Minute Speech & Record</h2>
+                        <p class="text-[10px] text-slate-500 mt-0.5">本番前の力試し。1分間、今のトピックについて自分の言葉で語って録音しましょう。</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 ml-0 md:ml-4 flex flex-col items-center justify-center space-y-4">
+                    <button id="recordToggleBtn" class="bg-rose-50 text-rose-500 border border-rose-100 p-6 rounded-full hover:bg-rose-100 transition shadow-sm">
+                        <i data-lucide="mic" class="w-8 h-8"></i>
+                    </button>
+                    <span id="recordStatus" class="text-xs font-bold text-slate-500">タップして録音開始（思考の記録）</span>
+                    <audio id="audioPlayback" controls class="w-full mt-2 hidden rounded-lg"></audio>
+                </div>
+            </section>
+
+            <!-- 🔄 STEP 4: 3-2-1 Retelling -->
+            <section class="mb-10 relative z-10">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center font-black text-sm shadow-md flex-shrink-0">4</div>
+                    <div>
+                        <h2 class="text-sm font-black text-slate-700 tracking-wide">3-2-1 Retelling</h2>
+                        <p class="text-[10px] text-slate-500 mt-0.5">文字に頼らず、以下のキーワード（情景）からダイレクトに英語を紡ぎ出します。</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 ml-0 md:ml-4">
+                    
+                    <!-- ★ 4コマ キーワード (ストーリーボード) 表示エリア -->
+                    <div id="retellingKeywordsContainer" class="mb-5 grid grid-cols-2 gap-3">
+                        <!-- ここにJavaScriptで4つのキーワードパネルが自動生成されます -->
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl mb-4">
+                        <button id="tab3m" class="tab-btn py-2 text-xs font-bold rounded-lg text-rose-700 bg-white shadow-sm transition border border-slate-200/50">3分</button>
+                        <button id="tab2m" class="tab-btn py-2 text-xs font-bold rounded-lg text-slate-500 hover:text-slate-800 transition">2分</button>
+                        <button id="tab1m" class="tab-btn py-2 text-xs font-bold rounded-lg text-slate-500 hover:text-slate-800 transition">1分</button>
+                    </div>
+
+                    <div class="bg-rose-50 border border-rose-100 rounded-2xl p-6 text-center relative overflow-hidden">
+                        <span id="speechState" class="absolute top-3 right-3 text-[9px] font-bold text-rose-500 flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block"></span> 待機中
+                        </span>
+                        
+                        <span id="speechTimerTitle" class="text-[10px] font-bold text-rose-400 tracking-widest block mb-1">RETELLING TIMER</span>
+                        <div id="speechTimerDisplay" class="text-5xl font-black tracking-widest text-rose-600 font-mono mb-4">03:00</div>
+                        
+                        <div class="flex justify-center gap-4">
+                            <button id="playSpeechBtn" class="bg-rose-500 hover:bg-rose-600 text-white rounded-full p-3.5 transition active:scale-95 shadow-md">
+                                <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+                            </button>
+                            <button id="pauseSpeechBtn" class="bg-slate-700 hover:bg-slate-800 text-white rounded-full p-3.5 transition active:scale-95 hidden shadow-md">
+                                <i data-lucide="pause" class="w-5 h-5 fill-current"></i>
+                            </button>
+                            <button id="resetSpeechBtn" class="bg-white border border-rose-200 hover:bg-rose-50 text-rose-500 rounded-full p-3.5 transition active:scale-95 shadow-sm">
+                                <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 📝 STEP 5: Record Workout -->
+            <section class="mb-6 relative z-10">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-black text-sm shadow-md flex-shrink-0">5</div>
+                    <div>
+                        <h2 class="text-sm font-black text-slate-700 tracking-wide">Record Workout</h2>
+                        <p class="text-[10px] text-slate-500 mt-0.5">本日のトレーニング結果を保存し、履歴を確認します。</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 ml-0 md:ml-4 space-y-4">
+                    <div class="space-y-4">
+                        <label class="flex items-center justify-between p-3 border border-slate-200 rounded-xl bg-slate-50 cursor-pointer hover:bg-slate-100 transition">
+                            <span class="text-xs font-bold text-slate-700 flex items-center gap-2">
+                                <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>
+                                リテリングは最後まで言えましたか？
+                            </span>
+                            <input type="checkbox" id="retellingSuccessCheck" class="w-5 h-5 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500">
+                        </label>
+
+                        <div>
+                            <span class="text-xs font-bold text-slate-600 block mb-1.5 flex items-center gap-1">
+                                <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> 気づき・反省点メモ
+                            </span>
+                            <textarea id="noteInput" rows="2" placeholder="詰まった発音、新しく覚えた表現など..." 
+                                      class="w-full text-xs p-3 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-800 resize-none"></textarea>
+                        </div>
+                    </div>
+
+                    <button id="saveLogBtn" class="w-full bg-slate-800 text-white py-3.5 px-4 rounded-xl font-black text-sm hover:bg-slate-900 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-md">
+                        <i data-lucide="save" class="w-4 h-4"></i> トレーニング結果を保存する
+                    </button>
+                    
+                    <p class="text-[10px] text-slate-400 text-center font-bold">
+                        ※STEP 1でWPMを計測していない場合はWPM=0で保存されます。
+                    </p>
+
+                    <div class="mt-4 pt-4 border-t border-slate-100 text-center">
+                        <p class="text-[10px] text-emerald-600/80 font-bold bg-emerald-50 py-2 px-3 rounded-lg inline-flex flex-col items-center gap-0.5 border border-emerald-100/50">
+                            <span class="flex items-center gap-1"><i data-lucide="activity" class="w-3 h-3"></i> 英語脳も筋肉も成長中！</span>
+                            <span>本日のカロリーとタンパク質の管理も忘れずに💪</span>
+                        </p>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-slate-200">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-black text-slate-700 tracking-wider flex items-center gap-1">
+                                <i data-lucide="trending-up" class="w-4 h-4 text-indigo-500"></i> WPM推移 (読むスピード)
+                            </span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mb-3 leading-relaxed">
+                            150 WPM以上を目標に、処理速度の成長を確認しましょう。
+                        </p>
+                        <div class="w-full h-40 relative bg-slate-50/50 rounded-xl p-2 border border-slate-100">
+                            <canvas id="wpmChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white text-xs py-3 px-6 rounded-full shadow-2xl flex items-center gap-2 opacity-0 pointer-events-none transition-all duration-300 z-[100] whitespace-nowrap font-bold">
+            <i data-lucide="info" class="w-4 h-4 text-emerald-400"></i>
+            <span id="toastMsg">処理が完了しました</span>
+        </div>
+
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        let safeLocalStorage = {
+            getItem: function(key) { try { return localStorage.getItem(key); } catch (e) { return window[`_safe_${key}`] || null; } },
+            setItem: function(key, value) { try { localStorage.setItem(key, value); } catch (e) { window[`_safe_${key}`] = value; } },
+            removeItem: function(key) { try { localStorage.removeItem(key); } catch (e) { delete window[`_safe_${key}`]; } }
+        };
+
+        const FALLBACK_LESSONS = [{
+            theme: "サンプルデータ",
+            text: "Yesterday, I went to a delicious Italian restaurant with my partner. We ate appetizers, grilled vegetables, grilled chicken, and pasta. We also enjoyed drinking some wine. It was a wonderful time. This morning, I am practicing English at home before going to work. I want to improve my speaking skills step by step.",
+            wordCount: 52
+        }];
+
+        const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxYyl4oBojrC5-O77NYVOhWgK8kCnE27_srVyDbUcZYxbEHYwTAuJhvqFCp5G4rWD6pFQ/exec';
+
+        let storage = { lessons: FALLBACK_LESSONS, logs: [], rawVocabList: [] };
+        let state = {
+            currentLessonIndex: 0, currentVocabIndex: 0, isCardFlipped: false,
+            wpmTimer: null, wpmStart: null, isWpmRunning: false, wordCount: 0,
+            speechTimer: null, speechSeconds: 180, currentSpeechLimit: 180, isSpeechRunning: false,
+            chart: null, measuredWpm: null, measuredSec: null,
+            gasUrl: safeLocalStorage.getItem('gasUrl') || DEFAULT_GAS_URL
+        };
+
+        const elements = {
+            settingsBtn: document.getElementById('settingsBtn'),
+            settingsPanel: document.getElementById('settingsPanel'),
+            closeSettings: document.getElementById('closeSettings'),
+            gasUrlInput: document.getElementById('gasUrlInput'),
+            saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+            
+            englishTextArea: document.getElementById('englishTextArea'),
+            playTextAudioBtn: document.getElementById('playTextAudioBtn'),
+            audioSpeedSlider: document.getElementById('audioSpeedSlider'),
+            audioSpeedLabel: document.getElementById('audioSpeedLabel'),
+            wordCountBadge: document.getElementById('wordCountBadge'),
+            themeBadge: document.getElementById('themeBadge'),
+            toggleLinkingBtn: document.getElementById('toggleLinkingBtn'),
+            toggleTranslationBtn: document.getElementById('toggleTranslationBtn'),
+            linkingGuide: document.getElementById('linkingGuide'),
+            translationArea: document.getElementById('translationArea'),
+            prevTextBtn: document.getElementById('prevTextBtn'),
+            nextTextBtn: document.getElementById('nextTextBtn'),
+            textIndexLabel: document.getElementById('textIndexLabel'),
+            syncDataBtn: document.getElementById('syncDataBtn'),
+            shuffleBtn: document.getElementById('shuffleBtn'),
+            
+            cardContainer: document.getElementById('cardContainer'),
+            flashCard: document.getElementById('flashCard'),
+            cardWord: document.getElementById('cardWord'),
+            playWordAudioBtn: document.getElementById('playWordAudioBtn'),
+            cardMeaning: document.getElementById('cardMeaning'),
+            cardExample: document.getElementById('cardExample'),
+            prevCardBtn: document.getElementById('prevCardBtn'),
+            nextCardBtn: document.getElementById('nextCardBtn'),
+            vocabIndexLabel: document.getElementById('vocabIndexLabel'),
+            
+            recordToggleBtn: document.getElementById('recordToggleBtn'),
+            recordStatus: document.getElementById('recordStatus'),
+            audioPlayback: document.getElementById('audioPlayback'),
+
+            // ★ 4コマテキスト・キーワード要素
+            retellingKeywordsContainer: document.getElementById('retellingKeywordsContainer'),
+
+            timerDisplay: document.getElementById('timerDisplay'),
+            startWpmBtn: document.getElementById('startWpmBtn'),
+            stopWpmBtn: document.getElementById('stopWpmBtn'),
+            wpmResultPanel: document.getElementById('wpmResultPanel'),
+            wpmValue: document.getElementById('wpmValue'),
+            timeTakenVal: document.getElementById('timeTakenVal'),
+            saveLogBtn: document.getElementById('saveLogBtn'),
+            retellingSuccessCheck: document.getElementById('retellingSuccessCheck'),
+            noteInput: document.getElementById('noteInput'),
+            tab3m: document.getElementById('tab3m'), tab2m: document.getElementById('tab2m'), tab1m: document.getElementById('tab1m'),
+            speechTimerTitle: document.getElementById('speechTimerTitle'),
+            speechTimerDisplay: document.getElementById('speechTimerDisplay'),
+            playSpeechBtn: document.getElementById('playSpeechBtn'),
+            pauseSpeechBtn: document.getElementById('pauseSpeechBtn'),
+            resetSpeechBtn: document.getElementById('resetSpeechBtn'),
+            speechState: document.getElementById('speechState'),
+            toast: document.getElementById('toast'), toastMsg: document.getElementById('toastMsg')
+        };
+
+        function showToast(message) {
+            elements.toastMsg.textContent = message;
+            elements.toast.classList.remove('opacity-0', 'pointer-events-none');
+            elements.toast.classList.add('opacity-100');
+            setTimeout(() => { elements.toast.classList.remove('opacity-100'); elements.toast.classList.add('opacity-0', 'pointer-events-none'); }, 3000);
+        }
+
+        // --- Audio Speed Control ---
+        let currentSpeechRate = 0.9;
+        elements.audioSpeedSlider.addEventListener('input', (e) => {
+            currentSpeechRate = parseFloat(e.target.value);
+            elements.audioSpeedLabel.textContent = currentSpeechRate.toFixed(1) + 'x';
+        });
+
+        // --- TTS (スマホ対応版) ---
+        let activeAudioBtn = null;
+        let englishVoices = [];
+        
+        function loadVoices() { 
+            englishVoices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('en')); 
+        }
+        
+        if ('speechSynthesis' in window) { 
+            window.speechSynthesis.onvoiceschanged = loadVoices; 
+            loadVoices(); 
+        }
+
+        function resetAudioUI() {
+            if (activeAudioBtn) {
+                const icon = activeAudioBtn.querySelector('i');
+                if (icon) { icon.setAttribute('data-lucide', 'volume-2'); lucide.createIcons(); }
+                activeAudioBtn.classList.remove('animate-pulse', 'text-emerald-700', 'text-amber-700');
+                activeAudioBtn = null;
+            }
+        }
+
+        function playAudio(text, btnElement, activeColorClass = 'text-emerald-700') {
+            if (!('speechSynthesis' in window)) return showToast('ブラウザが音声再生に非対応です。');
+            
+            if (window.speechSynthesis.speaking) {
+                const wasSame = (activeAudioBtn === btnElement);
+                window.speechSynthesis.cancel(); 
+                resetAudioUI();
+                if (wasSame) return; 
+            }
+            if (!text || text === "Loading..." || text === "No Words" || text === "不明") return;
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = currentSpeechRate; 
+            
+            if (englishVoices.length === 0) loadVoices();
+            
+            if (englishVoices.length > 0) {
+                const preferredVoice = englishVoices.find(v => v.lang === 'en-US' && v.name.includes('Siri')) 
+                                    || englishVoices.find(v => v.lang === 'en-US') 
+                                    || englishVoices[0];
+                if (preferredVoice) utterance.voice = preferredVoice;
+            }
+
+            utterance.onstart = () => {
+                activeAudioBtn = btnElement;
+                const icon = btnElement.querySelector('i');
+                if (icon) { icon.setAttribute('data-lucide', 'square'); lucide.createIcons(); }
+                btnElement.classList.add('animate-pulse', activeColorClass);
+            };
+            
+            utterance.onend = resetAudioUI; 
+            utterance.onerror = (e) => { console.warn("TTS Error:", e); resetAudioUI(); };
+            
+            window.speechSynthesis.resume();
+            window.speechSynthesis.speak(utterance);
+        }
+
+        elements.playTextAudioBtn.addEventListener('click', () => playAudio(elements.englishTextArea.textContent.replace(/【.*?】/g, ''), elements.playTextAudioBtn, 'text-emerald-700'));
+        elements.playWordAudioBtn.addEventListener('click', (e) => { e.stopPropagation(); playAudio(elements.cardWord.textContent, elements.playWordAudioBtn, 'text-amber-700'); });
+
+        // --- Voice Recorder ---
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        elements.recordToggleBtn.addEventListener('click', async () => {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        elements.audioPlayback.src = URL.createObjectURL(audioBlob);
+                        elements.audioPlayback.classList.remove('hidden');
+                        stream.getTracks().forEach(t => t.stop());
+                    };
+                    
+                    mediaRecorder.start();
+                    isRecording = true;
+                    
+                    elements.recordToggleBtn.classList.replace('bg-rose-50', 'bg-rose-500');
+                    elements.recordToggleBtn.classList.replace('text-rose-500', 'text-white');
+                    elements.recordToggleBtn.classList.add('animate-pulse');
+                    elements.recordToggleBtn.innerHTML = `<i data-lucide="square" class="w-8 h-8 fill-current"></i>`;
+                    elements.recordStatus.textContent = "録音中... (もう一度タップで停止)";
+                    lucide.createIcons();
+                } catch (err) {
+                    showToast('マイクのアクセスが許可されていません。');
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                
+                elements.recordToggleBtn.classList.replace('bg-rose-500', 'bg-rose-50');
+                elements.recordToggleBtn.classList.replace('text-white', 'text-rose-500');
+                elements.recordToggleBtn.classList.remove('animate-pulse');
+                elements.recordToggleBtn.innerHTML = `<i data-lucide="mic" class="w-8 h-8"></i>`;
+                elements.recordStatus.textContent = "録音完了！再生して確認しましょう。";
+                lucide.createIcons();
+            }
+        });
+
+        // --- ★ 英文から4コマ分のキーワードを抽出する関数 ---
+        function extractKeywords(text) {
+            let sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+            sentences = sentences.map(s => s.trim()).filter(s => s.length > 0);
+            
+            let parts = ['', '', '', ''];
+            if (sentences.length >= 4) {
+                const chunkSize = Math.ceil(sentences.length / 4);
+                for(let i=0; i<4; i++) {
+                    parts[i] = sentences.slice(i*chunkSize, (i+1)*chunkSize).join(' ');
+                }
+            } else if (sentences.length > 0) {
+                for(let i=0; i<4; i++) {
+                    parts[i] = sentences[i % sentences.length] || '';
+                }
+            }
+
+            // 無視する一般的な単語（ストップワード）
+            const stopWords = new Set(['i','my','me','we','our','us','you','your','he','his','him','she','her','it','its','they','their','them','this','that','these','those','am','is','are','was','were','be','been','have','has','had','do','does','did','a','an','the','and','but','or','if','because','as','while','of','at','by','for','with','about','into','through','to','from','in','out','on','off','over','under','then','when','where','why','how','all','any','both','each','few','more','most','other','some','such','no','not','only','own','same','so','than','too','very','can','will','just','should','now','went','also','want','got','get','make','made','take','took','see','saw','look','looked','say','said','tell','told','know','knew','think','thought','come','came','go','going','give','gave']);
+            
+            return parts.map(part => {
+                const words = part.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
+                // 3文字以上でストップワードに含まれないものを抽出
+                const keywords = words.filter(w => w.length > 3 && !stopWords.has(w));
+                return [...new Set(keywords)].slice(0, 3); // 最大3語
+            });
+        }
+
+        // --- Core Logic ---
+        function loadLesson(index) {
+            if (index < 0 || index >= storage.lessons.length) return;
+            state.currentLessonIndex = index;
+            if ('speechSynthesis' in window && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); resetAudioUI(); }
+
+            const lesson = storage.lessons[index];
+            let englishText = lesson.text || lesson.english || lesson.content || lesson['英文テキスト'] || lesson['英文'] || lesson['C'];
+            if (!englishText && typeof lesson === 'object') {
+                let longest = ""; for (const k in lesson) { if (typeof lesson[k] === 'string' && lesson[k].length > longest.length) longest = lesson[k]; }
+                englishText = longest.length > 20 ? longest : "テキストがありません。";
+            }
+            let translatedText = lesson.translation || lesson.japanese || lesson['和訳'] || lesson['日本語訳'];
+            if (!translatedText && typeof lesson === 'object') { for (const k in lesson) if (k.includes('訳') || k.includes('日本語') || k.includes('J')) translatedText = lesson[k]; }
+            let isAutoTranslate = false;
+            if (!translatedText || translatedText.trim() === "" || translatedText.includes("登録されていません")) { translatedText = "自動翻訳中..."; isAutoTranslate = true; }
+
+            let themeText = lesson.theme || lesson.title || lesson['学習テーマ'] || lesson['テーマ'] || lesson['B'] || "無題";
+
+            elements.englishTextArea.textContent = englishText;
+            elements.translationArea.textContent = translatedText;
+            elements.themeBadge.textContent = themeText;
+            elements.textIndexLabel.textContent = `${index + 1} / ${storage.lessons.length}`;
+            
+            // ★ 4コマストーリーボード（キーワードパネル）の生成と表示
+            if (englishText && englishText.length > 20) {
+                const keywordsList = extractKeywords(englishText);
+                let kwHtml = '';
+                keywordsList.forEach((words, i) => {
+                    const wordHtml = words.length > 0 
+                        ? words.map(w => `<span class="capitalize text-slate-800 font-bold text-sm tracking-wide block">${w}</span>`).join('<div class="h-1"></div>')
+                        : `<span class="text-slate-400 text-xs">-</span>`;
+                    
+                    kwHtml += `
+                        <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-sm min-h-[100px] relative overflow-hidden">
+                            <div class="absolute top-0 left-0 w-full h-1 bg-rose-400/80"></div>
+                            <span class="text-[9px] font-black text-rose-500/70 uppercase tracking-widest mb-2 flex items-center gap-1"><i data-lucide="clapperboard" class="w-3 h-3"></i>Scene ${i+1}</span>
+                            <div class="w-full">${wordHtml}</div>
+                        </div>
+                    `;
+                });
+                elements.retellingKeywordsContainer.innerHTML = kwHtml;
+            } else {
+                elements.retellingKeywordsContainer.innerHTML = '<div class="col-span-2 text-center text-xs text-slate-400 p-4 border border-slate-200 rounded-xl bg-slate-50">テキストが短すぎるためストーリーボードを生成できません。</div>';
+            }
+            
+            if (isAutoTranslate && englishText && !englishText.startsWith('【')) {
+                fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(englishText)}`)
+                    .then(res => res.json()).then(data => { elements.translationArea.textContent = "【自動翻訳】\n" + data[0].map(i => i[0]).join(''); })
+                    .catch(() => elements.translationArea.textContent = "自動翻訳失敗");
+            }
+
+            state.wordCount = lesson.wordCount || lesson['総単語数'] || (englishText ? englishText.trim().split(/\s+/).filter(w => w.length > 0).length : 0);
+            elements.wordCountBadge.textContent = `${state.wordCount} words`;
+
+            let linkingData = lesson.linking || lesson['リンキングデータ'] || lesson['リンキング'];
+            if (typeof linkingData === 'string') { try { linkingData = JSON.parse(linkingData); } catch(e) { linkingData = null; } }
+            if (linkingData && Array.isArray(linkingData) && linkingData.length > 0) {
+                elements.linkingGuide.innerHTML = linkingData.map(i => `<div class="border-b border-emerald-100/50 pb-1 mb-1 last:border-0">・ <strong>${i.linked || i.linkedWord || ''}</strong> [${i.pronunciation || i.pronounce || ''}] <span class="text-slate-500">（原音: ${i.original || i.originalWord || ''}）</span></div>`).join('');
+            } else {
+                elements.linkingGuide.innerHTML = '<p class="text-slate-500 text-xs">登録されていません。</p>';
+            }
+
+            filterVocabList(themeText); loadVocabCard();
+            
+            // Recorder reset
+            elements.audioPlayback.classList.add('hidden');
+            elements.audioPlayback.src = "";
+            elements.recordStatus.textContent = "タップして録音開始（思考の記録）";
+            
+            if (state.isWpmRunning) elements.stopWpmBtn.click();
+            elements.timerDisplay.textContent = "00:00.00";
+            elements.wpmResultPanel.classList.add('hidden');
+            state.measuredWpm = null; state.measuredSec = null;
+            elements.noteInput.value = ''; elements.retellingSuccessCheck.checked = false;
+            
+            lucide.createIcons(); // アイコンの再描画
+        }
+
+        function filterVocabList(themeName) {
+            if (storage.rawVocabList) {
+                storage.lessons[state.currentLessonIndex].vocabList = storage.rawVocabList.filter(item => {
+                    let t = item.theme || item['学習テーマ'] || item['テーマ'] || item['B'];
+                    if (!t) for (const k in item) if (k.includes('テーマ')) t = item[k];
+                    return t === themeName;
+                });
+            }
+            state.currentVocabIndex = 0;
+        }
+
+        function loadVocabCard() {
+            const lesson = storage.lessons[state.currentLessonIndex];
+            if ('speechSynthesis' in window && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); resetAudioUI(); }
+            if (!lesson.vocabList || lesson.vocabList.length === 0) {
+                elements.cardWord.textContent = "No Words"; elements.cardMeaning.textContent = "未登録"; elements.cardExample.textContent = "-"; elements.vocabIndexLabel.textContent = "0 / 0"; return;
+            }
+            state.isCardFlipped = false; elements.flashCard.classList.remove('rotate-y-180');
+            setTimeout(() => {
+                const item = lesson.vocabList[state.currentVocabIndex];
+                let word = item.word || item['英単語 / フレーズ'] || item['C'];
+                let meaning = item.meaning || item['日本語訳'] || item['D'];
+                let example = item.example || item['マイ例文'] || item['E'] || "";
+                if (!word) { for (const k in item) { if (k.includes('単語')) word = item[k]; else if (k.includes('訳')) meaning = item[k]; else if (k.includes('例')) example = item[k]; } }
+                
+                elements.cardWord.textContent = word || "不明";
+                elements.cardExample.textContent = example ? `"${example}"` : "";
+                elements.vocabIndexLabel.textContent = `${state.currentVocabIndex + 1} / ${lesson.vocabList.length}`;
+                
+                if (!meaning || meaning === "未登録") {
+                    elements.cardMeaning.textContent = "翻訳中...";
+                    if (word && word !== "No Words") {
+                        fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(word)}`)
+                            .then(res => res.json()).then(data => { elements.cardMeaning.textContent = "【自動】" + data[0].map(i => i[0]).join(''); })
+                            .catch(() => { elements.cardMeaning.textContent = "未登録"; });
+                    }
+                } else {
+                    elements.cardMeaning.textContent = meaning;
+                }
+            }, 150);
+        }
+
+        elements.prevTextBtn.addEventListener('click', () => { if (state.currentLessonIndex > 0) loadLesson(state.currentLessonIndex - 1); });
+        elements.nextTextBtn.addEventListener('click', () => { if (state.currentLessonIndex < storage.lessons.length - 1) loadLesson(state.currentLessonIndex + 1); });
+        elements.cardContainer.addEventListener('click', () => { if (elements.cardWord.textContent === "No Words") return; state.isCardFlipped = !state.isCardFlipped; elements.flashCard.classList.toggle('rotate-y-180'); });
+        elements.prevCardBtn.addEventListener('click', (e) => { e.stopPropagation(); if (state.currentVocabIndex > 0) { state.currentVocabIndex--; loadVocabCard(); } });
+        elements.nextCardBtn.addEventListener('click', (e) => { e.stopPropagation(); if (storage.lessons[state.currentLessonIndex].vocabList && state.currentVocabIndex < storage.lessons[state.currentLessonIndex].vocabList.length - 1) { state.currentVocabIndex++; loadVocabCard(); } });
+
+        elements.settingsBtn.addEventListener('click', () => elements.settingsPanel.classList.toggle('hidden'));
+        elements.closeSettings.addEventListener('click', () => elements.settingsPanel.classList.add('hidden'));
+        elements.saveSettingsBtn.addEventListener('click', () => {
+            if (elements.gasUrlInput.value.trim()) {
+                state.gasUrl = elements.gasUrlInput.value.trim(); safeLocalStorage.setItem('gasUrl', state.gasUrl);
+                elements.settingsPanel.classList.add('hidden'); triggerAutoSync();
+            }
+        });
+        elements.gasUrlInput.value = state.gasUrl;
+
+        elements.toggleLinkingBtn.addEventListener('click', () => { elements.linkingGuide.classList.toggle('hidden'); elements.toggleLinkingBtn.classList.toggle('text-emerald-600'); });
+        elements.toggleTranslationBtn.addEventListener('click', () => { elements.translationArea.classList.toggle('hidden'); elements.toggleTranslationBtn.classList.toggle('text-indigo-600'); });
+        elements.shuffleBtn.addEventListener('click', () => {
+            if (storage.lessons.length <= 1) return showToast('教材が1件のみです');
+            let r = state.currentLessonIndex; while (r === state.currentLessonIndex) r = Math.floor(Math.random() * storage.lessons.length);
+            loadLesson(r); showToast('シャッフルしました🎲');
+        });
+
+        // WPM
+        elements.startWpmBtn.addEventListener('click', () => {
+            if (state.isWpmRunning) return; state.isWpmRunning = true; state.wpmStart = Date.now();
+            elements.wpmResultPanel.classList.add('hidden'); elements.startWpmBtn.disabled = true; elements.stopWpmBtn.disabled = false; elements.timerDisplay.classList.add('text-emerald-400');
+            state.wpmTimer = setInterval(() => {
+                let d = (Date.now() - state.wpmStart) / 1000;
+                elements.timerDisplay.textContent = `${Math.floor(d/60).toString().padStart(2, '0')}:${Math.floor(d%60).toString().padStart(2, '0')}.${Math.floor((d*100)%100).toString().padStart(2, '0')}`;
+            }, 30);
+        });
+
+        elements.stopWpmBtn.addEventListener('click', () => {
+            if (!state.isWpmRunning) return; state.isWpmRunning = false; clearInterval(state.wpmTimer);
+            elements.startWpmBtn.disabled = false; elements.stopWpmBtn.disabled = true; elements.timerDisplay.classList.remove('text-emerald-400');
+            state.measuredSec = (Date.now() - state.wpmStart) / 1000;
+            state.measuredWpm = Math.round((state.wordCount / state.measuredSec) * 60);
+            elements.wpmValue.textContent = state.measuredWpm; elements.timeTakenVal.textContent = `${state.measuredSec.toFixed(1)}s`;
+            elements.wpmResultPanel.classList.remove('hidden'); elements.wpmResultPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+
+        // Save
+        elements.saveLogBtn.addEventListener('click', async () => {
+            if (!state.gasUrl) return showToast('連携URLを設定してください。');
+            const fw = state.measuredWpm || 0;
+            if (fw === 0 && !confirm("WPMが計測されていませんが保存しますか？")) return;
+            
+            elements.saveLogBtn.disabled = true; elements.saveLogBtn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 送信中...`; lucide.createIcons();
+            try {
+                const theme = storage.lessons[state.currentLessonIndex].theme || "無題";
+                await fetch(state.gasUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "saveLog", theme: theme, wordCount: state.wordCount, seconds: state.measuredSec || 0, wpm: fw, retelling: elements.retellingSuccessCheck.checked ? "成功" : "不合格", note: elements.noteInput.value }) });
+                showToast('ワークアウト完了！🎉');
+                storage.logs.push({ date: new Date().toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' }), wpm: fw, seconds: state.measuredSec || 0, theme: theme });
+                updateChart(); loadLesson(state.currentLessonIndex);
+            } catch (err) { showToast('保存エラーが発生しました。'); } 
+            finally { elements.saveLogBtn.disabled = false; elements.saveLogBtn.innerHTML = `<i data-lucide="save" class="w-4 h-4"></i> トレーニング結果を保存する`; lucide.createIcons(); }
+        });
+
+        // Sync
+        async function triggerAutoSync() {
+            if (!state.gasUrl) return;
+            elements.syncDataBtn.disabled = true; elements.syncDataBtn.innerHTML = `<i data-lucide="loader" class="w-3 h-3 animate-spin"></i> 同期中`; lucide.createIcons();
+            try {
+                const res = await (await fetch(`${state.gasUrl}?action=getLessons`)).json();
+                let sl = (res.lessons || res.data || res.Texts || res['2_Texts'] || []).filter(l => { const t = l.text || l.english || l.content || l['英文']; return t && String(t).trim().length > 0; });
+                let sv = (res.vocabList || res.vocabulary || res['1_Vocabulary'] || []).filter(v => { const w = v.word || v['英単語']; return w && String(w).trim().length > 0; });
+                
+                if (sl.length > 0) {
+                    storage.lessons = sl; if (sv) storage.rawVocabList = sv;
+                    if (res.logs && Array.isArray(res.logs)) storage.logs = res.logs;
+                    safeLocalStorage.setItem('my_english_lessons', JSON.stringify(storage.lessons));
+                    loadLesson(storage.lessons.length - 1); updateChart(); showToast(`データを同期しました`);
+                }
+            } catch (err) { showToast('通信エラーが発生しました'); updateChart(); } 
+            finally { elements.syncDataBtn.disabled = false; elements.syncDataBtn.innerHTML = `<i data-lucide="refresh-cw" class="w-3 h-3"></i> 同期`; lucide.createIcons(); }
+        }
+        elements.syncDataBtn.addEventListener('click', triggerAutoSync);
+
+        // Chart
+        function initChart() {
+            state.chart = new Chart(document.getElementById('wpmChart').getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: 'rgb(16, 185, 129)', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderWidth: 3, pointBackgroundColor: 'rgb(16, 185, 129)', pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: 5, fill: true }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, suggestedMax: 200, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10, family: 'monospace' }, color: '#94a3b8' } }, x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } } } }
+            });
+        }
+        function updateChart() {
+            if (!state.chart || !storage.logs.length) return;
+            const l = storage.logs.slice(-15); state.chart.data.labels = l.map(x => x.date); state.chart.data.datasets[0].data = l.map(x => x.wpm); state.chart.update();
+        }
+
+        // Retelling Timer
+        function setSpeechMode(s, t, a) {
+            clearInterval(state.speechTimer); state.isSpeechRunning = false; state.speechSeconds = s; state.currentSpeechLimit = s;
+            elements.speechTimerTitle.textContent = t; elements.speechTimerDisplay.textContent = `${Math.floor(s/60).toString().padStart(2,'0')}:00`;
+            [elements.tab3m, elements.tab2m, elements.tab1m].forEach(x => { x.classList.remove('text-rose-700', 'bg-white', 'border-slate-200/50', 'shadow-sm'); x.classList.add('text-slate-500'); });
+            a.classList.remove('text-slate-500'); a.classList.add('text-rose-700', 'bg-white', 'border-slate-200/50', 'shadow-sm');
+            elements.playSpeechBtn.classList.remove('hidden'); elements.pauseSpeechBtn.classList.add('hidden'); elements.speechState.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block"></span> 待機中`;
+        }
+        elements.tab3m.addEventListener('click', () => setSpeechMode(180, '3 MINUTES RETELLING', elements.tab3m));
+        elements.tab2m.addEventListener('click', () => setSpeechMode(120, '2 MINUTES RETELLING', elements.tab2m));
+        elements.tab1m.addEventListener('click', () => setSpeechMode(60, '1 MINUTE RETELLING', elements.tab1m));
+        elements.playSpeechBtn.addEventListener('click', () => {
+            state.isSpeechRunning = true; elements.playSpeechBtn.classList.add('hidden'); elements.pauseSpeechBtn.classList.remove('hidden'); elements.speechState.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse inline-block"></span> スピーチ中`;
+            state.speechTimer = setInterval(() => {
+                state.speechSeconds--; elements.speechTimerDisplay.textContent = `${Math.floor(state.speechSeconds/60).toString().padStart(2,'0')}:${(state.speechSeconds%60).toString().padStart(2,'0')}`;
+                if (state.speechSeconds <= 0) { clearInterval(state.speechTimer); state.isSpeechRunning = false; showToast('Time Up!'); elements.speechState.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block"></span> 終了`; elements.playSpeechBtn.classList.remove('hidden'); elements.pauseSpeechBtn.classList.add('hidden'); }
+            }, 1000);
+        });
+        elements.pauseSpeechBtn.addEventListener('click', () => { clearInterval(state.speechTimer); elements.playSpeechBtn.classList.remove('hidden'); elements.pauseSpeechBtn.classList.add('hidden'); elements.speechState.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span> 一時停止`; });
+        elements.resetSpeechBtn.addEventListener('click', () => setSpeechMode(state.currentSpeechLimit, elements.speechTimerTitle.textContent, state.currentSpeechLimit === 180 ? elements.tab3m : (state.currentSpeechLimit === 120 ? elements.tab2m : elements.tab1m)));
+
+        window.addEventListener('DOMContentLoaded', () => { initChart(); loadLesson(state.currentLessonIndex); updateChart(); setTimeout(() => { if(state.gasUrl) triggerAutoSync(); }, 500); });
+    </script>
+</body>
+</html>
